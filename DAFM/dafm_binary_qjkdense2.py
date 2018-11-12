@@ -17,6 +17,7 @@ np.random.seed(42)
 from math import sqrt
 import os
 import sys
+from DAFM.binary_ops import binarize
 
 from collections import defaultdict
 from DAFM.binary_layers import BinaryDense3 as BinaryDense
@@ -58,26 +59,30 @@ class DeepAFM:
         if self.random_init == "normal":
             return K.random_normal(shape, 0.5, 0.05, dtype=dtype, seed=22)
         else:
-            return K.random_uniform(shape, 0, 0.55, dtype=dtype, seed=22)
+            return K.random_uniform(shape, 0, 1, dtype=dtype, seed=22)
+
 
     def custom_random2(self, shape, dtype=None):
 
-        return K.random_uniform(shape, 0, 0.1, dtype=dtype, seed=22)
+        return K.constant(1, shape=shape, dtype=dtype)
 
     def custom_random3(self, shape, dtype=None):
-
-        return K.constant(0.6, shape=shape, dtype=dtype)
+        x=shape[0]
+        y =shape[1]
+        print(x,y)
+        a = K.constant(1,shape =(x,15))
+        b = K.constant(0.5000001,shape=(x,15))
+        return K.concatenate([a,b])
 
     def custom_random4(self, shape, dtype=None):
-        return K.variable(0, dtype=dtype)
-
-    def custom_random5(self, shape, dtype=None):
-
-        return np.ones(shape, dtype=dtype)*0.1
-
-    def custom_random6(self, shape, dtype=None):
-
-        return np.zeros((shape),dtype=dtype)
+        x=shape[0]
+        y =shape[1]
+        print(x,y)
+        a = K.constant(1,shape =(x,15))
+        b = K.constant(0,shape=(x,6))
+        c =K.constant(1,shape =(x,1))
+        d = K.constant(0,shape =(x,8))
+        return K.concatenate([a,b,c,d])
 
     def f(self, x):
         def custom_init(shape, dtype=None):
@@ -88,6 +93,48 @@ class DeepAFM:
 
         skills = np.shape(Q_jk_initialize)[1]
         steps = np.shape(Q_jk_initialize)[0]
+        print('original:',np.shape(Q_jk_initialize))
+        #Q_jk_initialize = Q_jk_initialize*0.49999+0.50001
+        #print(Q_jk_initialize)
+        skill_add =np.ones((steps,skills))
+        skill_add1 =np.zeros((steps,6))
+        #skill_add2 =np.ones((steps,skills))*0.5000001
+        skill_add2 =np.ones((steps,1))*0.5000001
+
+        #skill_add2 =np.random.rand(steps,1)
+        skill_add3 =np.zeros((steps,8))
+        Q_jk_initialize=np.concatenate([Q_jk_initialize,skill_add1,skill_add2,skill_add3],1)
+        #Q_jk_initialize=np.concatenate([Q_jk_initialize,skill_add2],1)
+        #Q_jk_initialize=np.concatenate([skill_add,Q_jk_initialize],1)
+        #Q_jk_initialize=np.concatenate([Q_jk_initialize,Q_jk_initialize],1)
+
+        print('after:',np.shape(Q_jk_initialize))
+        skills = 2*skills
+        #skills = skills + 1
+
+        '''
+        skills =18
+        #Q_jk_initialize =np.concatenate([Q_jk_initialize[:,3:6], np.zeros((steps, 4))], 1)_jk_initialize[:,13
+        Q_jk_initializ =[]
+        Q_jk_initializ.append(Q_jk_initialize[:,:10])
+        Q_jk_initializ.append(Q_jk_initialize[:,12:16])
+        #print(Q_jk_initializ)
+        Q_jk_initializ.append(Q_jk_initialize[:,19:22])
+        Q_jk_initializ.append(Q_jk_initialize[:,24:27])
+        Q_jk_initializ.append(Q_jk_initialize[:,28:30])
+        Q_jk_initialize1 = np.concatenate([Q_jk_initialize[:,:4], Q_jk_initialize[:,5:10],Q_jk_initialize[:,13:14],Q_jk_initialize[:,18:22],Q_jk_initialize[:,23:25],Q_jk_initialize[:,26:28]], 1)
+        #Q_jk_initializ =np.array(Q_jk_initializ)
+        #print('!:',np.shape(Q_jk_initialize))
+        #print(type(Q_jk_initialize))
+        #Q_jk_initializ.append(Q_jk_initialize[:,9])
+        #Q_jk_initializ.append(Q_jk_initialize[:,12])
+        #Q_jk_initializ.append(np.zeros((skills,2)))
+        #Q_jk_initialize =np.concatenate([Q_jk_initialize[:,0],Q_jk_initialize[:,2],Q_jk_initialize[:,9],Q_jk_initialize,12])
+        #Q_jk_initializ =Q_jk_initialize[:,0]+Q_jk_initialize[:,2]+Q_jk_initialize[:,9]+Q_jk_initialize[:,12]+Q_jk_initialize[:,13]
+        #Q_jk_initializ=np.concatenate([Q_jk_initializ,np.zeros((steps,2))],1)
+        Q_jk_initialize = []
+        Q_jk_initialize =Q_jk_initialize1
+        '''
         self.activation = activation
         if '-' in self.activation:
             activation = self.custom_activation
@@ -155,6 +202,8 @@ class DeepAFM:
             T_k = TimeDistributed(Dense(skills, activation='linear', use_bias=False, trainable=True), name="T_k")(virtual_input1)
             bias_layer = TimeDistributed(Dense(1, activation='linear', use_bias=False, kernel_initializer=initializers.Zeros(), trainable=True), name="bias")(virtual_input1)
 
+
+
         step_input = Input(batch_shape=(None, None, steps), name='step_input')
         if randomize:
             if binary=='False':
@@ -167,45 +216,44 @@ class DeepAFM:
             if binary=='False':
                 print('No binary!')
                 Q_jk = TimeDistributed(Dense(skills, activation='relu', kernel_initializer=self.f(Q_jk_initialize), use_bias=False,), trainable=qtrainable, name="Q_jk")(step_input)
-                #Q_jk = TimeDistributed(Dense(skills, activation='selu', kernel_initializer=self.custom_random2, use_bias=False,), trainable=qtrainable, name="Q_jk")(step_input)
-
-                #Q_jk = TimeDistributed(Dense(skills, activation='relu', kernel_initializer=self.custom_random2,trainable=True,
-                #                use_bias=False), name="Q_jk", trainable=qtrainable)(step_input)
                 print('type',dafm_type)
                 print('qtrainable:', qtrainable)
 
                 print('---------------------------------------------------------')
-                print('orginal qjk',Q_jk_initialize)
+                #print('orginal qjk',Q_jk_initialize)
             else:
                 print('Binary Got!')
                 Q_jk = TimeDistributed(BinaryDense(skills, activation='relu', kernel_initializer=self.f(Q_jk_initialize),
                                 use_bias=False), name="Q_jk", trainable=qtrainable)(step_input)
 
-                #Q_jk = TimeDistributed(BinaryDense(skills, activation='relu', kernel_initializer=self.custom_random6,
+                #Q_jk = TimeDistributed(BinaryDense(skills, activation='relu', kernel_initializer=self.custom_random3,
                 #                use_bias=False), name="Q_jk", trainable=qtrainable)(step_input)
-
-                #Q_jk = TimeDistributed(BinaryDense(skills, activation='relu', kernel_initializer=initializers.zeros(),
-                #                use_bias=False), name="Q_jk", trainable=qtrainable)(step_input)
-
                 print('---------------------------------------------------------')
-                print('orginal qjk', Q_jk_initialize)
+                #print('orginal qjk', Q_jk_initialize)
 
         if dafm_type == "random-qjk-dense-normal" or dafm_type == "random-qjk-dense-uniform":
             if binary =='False':
-                Q_jk = TimeDistributed(Dense(skills, activation=activation_dense, use_bias=False, kernel_initializer=self.custom_random), trainable=qtrainable,name="Q_jk_dense")(Q_jk)
+                Q_jk = TimeDistributed(Dense(skills, activation=activation_dense, use_bias=False, kernel_initializer=self.custom_random, trainable=True), name="Q_jk_dense")(Q_jk)
             else:
-                Q_jk = TimeDistributed(BinaryDense(skills, activation=activation_dense, use_bias=False, kernel_initializer=self.custom_random, trainable=True),trainable=qtrainable, name="Q_jk_dense")(Q_jk)
+                Q_jk = TimeDistributed(BinaryDense(skills, activation=activation_dense, use_bias=False, kernel_initializer=self.custom_random, trainable=True), name="Q_jk_dense")(Q_jk)
 
         elif dafm_type == "qjk-dense":
             if binary =='False':
-                Q_jk = TimeDistributed(Dense(skills, activation=activation_dense, use_bias=False, kernel_initializer=initializers.Identity(), trainable=True),trainable=qtrainable, name="Q_jk_dense")(Q_jk)
+                Q_jk = TimeDistributed(Dense(skills, activation=activation_dense, use_bias=False, kernel_initializer=initializers.Identity(), trainable=True), name="Q_jk_dense")(Q_jk)
             else:
-                Q_jk = TimeDistributed(BinaryDense(skills, activation=activation_dense, use_bias=False, kernel_initializer=initializers.Identity(), trainable=True),trainable=qtrainable, name="Q_jk_dense")(Q_jk)
+                Q_jk = TimeDistributed(BinaryDense(skills, activation=activation_dense, use_bias=False, kernel_initializer=initializers.Identity(), trainable=True), name="Q_jk_dense")(Q_jk)
         else:
             pass
 
+        print('SSSSSkills',skills)
+
+        #qjk_dense =  TimeDistributed(BinaryDense(skills, activation='linear', use_bias=False,kernel_initializer=initializers.zeros()), name="qjk_dense", trainable=True)(virtual_input1)
+        qjk_dense =  TimeDistributed(BinaryDense(skills, activation='linear', use_bias=False,kernel_initializer=self.custom_random4), name="qjk_dense", trainable=False)(virtual_input1)
+
+        Q_jk = multiply([Q_jk, qjk_dense],name='new_Qjk')
+
         Qjk_mul_Bk = multiply([Q_jk, B_k])
-        sum_Qjk_Bk = TimeDistributed(Dense(1, activation='linear',kernel_initializer=initializers.Ones(), use_bias=False),  trainable=False, name="sum_Qjk_Bk")(Qjk_mul_Bk)
+        sum_Qjk_Bk = TimeDistributed(Dense(1, activation='linear',kernel_initializer=initializers.Ones(), use_bias=False), trainable=False, name="sum_Qjk_Bk")(Qjk_mul_Bk)
 
         P_k = SimpleRNN(skills, kernel_initializer=initializers.Identity(), recurrent_initializer=initializers.Identity() , use_bias=False, trainable=False, activation='linear', return_sequences=True, name="P_k")(Q_jk)
 
@@ -227,7 +275,7 @@ class DeepAFM:
                 S_k = TimeDistributed(Dense(1, activation="linear", use_bias=False), name='S_k')(section_input)
             Concatenate = concatenate([Concatenate, S_k])
 
-        output = TimeDistributed(Dense(1, activation="sigmoid",  kernel_initializer=initializers.Ones(), use_bias=False),trainable=False,name="output")(Concatenate)
+        output = TimeDistributed(Dense(1, activation="sigmoid",  kernel_initializer=initializers.Ones(), use_bias=False), name="output",trainable=False)(Concatenate)
         if section == "onehot" and not (theta_student=="False"):
             model = Model(inputs=[virtual_input1, step_input, section_input, student_input], outputs=output)
         elif section == "onehot" and theta_student=="False":
@@ -237,15 +285,17 @@ class DeepAFM:
         else:
             model = Model(inputs=[virtual_input1, step_input], outputs=output)
 
-        d_optimizer = {"rmsprop":optimizers.RMSprop(lr=0.01), "adam":optimizers.Adam(lr=0.01), "adagrad":optimizers.Adagrad(lr=learning_rate) }
+        d_optimizer = {"rmsprop":optimizers.RMSprop(lr=0.002), "adam":optimizers.Adam(lr=0.005), "adagrad":optimizers.Adagrad(lr=learning_rate) }
         model.compile( optimizer = d_optimizer["adam"],
                        loss = self.custom_bce)
         return model
 
-    def fit(self, x_train, y_train, x_train_section, x_train_student, x_test, y_test, x_test_section, x_test_student, model, epochs=45, batch_size=48, loaded=False, validation=True):
+    def fit(self, x_train, y_train, x_train_section, x_train_student, x_test, y_test, x_test_section, x_test_student, model, epochs=225, batch_size=48, loaded=False, validation=True):
 
         weights = model.get_weights()
         qjk_weight = weights[0]
+
+
         names = [weight.name for layer in model.layers for weight in layer.weights]
         for name, weight in zip(names, weights):
             print(name, weight.shape)
@@ -256,18 +306,26 @@ class DeepAFM:
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             # print('-----------------------------------')
-            print('Original qjk',sess.run(qjk_weight))
+            # print('Original qjk',sess.run(qjk_weight))
             # print('-----------------------------------')
-            print('ori qjk', sess.run(qjk_weight))
-            #print('ori rnn', sess.run(rnn))
-            con_qjk =sess.run(qjk_weight)
-            print(' QJK')
-            print('TRIANGLE_RECTANGLE(BASE QUESTION1)', con_qjk[111, :])
-            print('TRIANGLE_RECTANGLE(AREA QUESTION1)', con_qjk[110, :])
+            qjk =  sess.run(qjk_weight)
 
-            print('-----------------------------------')
-            # print('qjk dense',sess.run(qjk_dense))
+            print('Original QJK')
+            print('TRIANGLE_RECTANGLE(BASE QUESTION1)', qjk[111,:])
+            print('TRIANGLE_RECTANGLE(AREA QUESTION1)', qjk[110,:])
+            #print('ori rnn', sess.run(rnn))
             # print('-----------------------------------')
+
+        qjk_dense = weights[1]
+        qjk_dense = tf.constant(qjk_dense)
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            bin_qjk_dense =binarize(qjk_dense,1)
+            print('ori qjk dense',sess.run(qjk_dense))
+            print('ori binary qjk dense',sess.run(bin_qjk_dense))
+
+
+
 
         loss_epoch = {"epoch":[], "loss":[], "val_loss":[], 'patience':[]}
         print ("Max Epochs", epochs)
@@ -301,7 +359,7 @@ class DeepAFM:
             epoch = epochs
 
         else:
-            while (patience <=10 and epoch <= epochs and (not self.dafm_type == "round-fine-tuned") and (loaded == False)):
+            while (patience <=5 and epoch <= epochs and (not self.dafm_type == "round-fine-tuned") and (loaded == False)):
                 permutation = np.random.permutation(x_train.shape[0])
                 x_train = x_train[permutation]
                 y_train = y_train[permutation]
