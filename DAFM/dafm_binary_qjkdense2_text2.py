@@ -66,10 +66,10 @@ class DeepAFM:
 
     def another_bce(self,y_true, y_pred):
         ans = K.binary_crossentropy(y_true, y_pred)
-        print('2',np.shape(ans)) # 139 118
+        print('2',np.shape(ans)) # (,,68)
         ans = K.mean(ans, axis=-1)
         #ans = np.sum(np.sum(ans))
-        print('3',np.shape(ans)) # 139 1
+        print('3',np.shape(ans)) # (,68)
         ans = K.mean(ans)
         return ans
 
@@ -212,7 +212,7 @@ class DeepAFM:
             return K.cast_to_floatx(np.reshape(x, shape))
         return custom_init
 
-    def build(self, dafm_type="fine-tuned", optimizer="rmsprop", learning_rate=0.01, activation="relu", Q_jk_initialize=0, section="", section_count=0, model1="", stateful=False, theta_student="False", student_count=0,binary='True'):
+    def build(self, dafm_type="fine-tuned", optimizer="rmsprop", learning_rate=0.01, activation="relu",skill_to_bow=0, Q_jk_initialize=0, section="", section_count=0, model1="", stateful=False, theta_student="False", student_count=0,binary='True'):
 
         skills = np.shape(Q_jk_initialize)[1]
         steps = np.shape(Q_jk_initialize)[0]
@@ -397,7 +397,6 @@ class DeepAFM:
                 Q_jk = TimeDistributed(Dense(skills, activation='linear', kernel_initializer=self.f(Q_jk_initialize), use_bias=False,), trainable=qtrainable, name="Q_jk")(step_input)
                 print('type',dafm_type)
                 print('qtrainable:', qtrainable)
-
                 print('---------------------------------------------------------')
                 #print('orginal qjk',Q_jk_initialize)
             else:
@@ -406,13 +405,9 @@ class DeepAFM:
                 print('trainable',qtrainable)
                 #Q_jk = TimeDistributed(BinaryDense(skills, activation='linear', kernel_initializer=self.f(Q_jk_initialize),
                 #                use_bias=False,trainable =qtrainable), name="Q_jk", trainable=qtrainable)(step_input)
-
-                Q_jk_layer = BinaryDense(skills, activation='linear', kernel_initializer=self.f(Q_jk_initialize),
-                                use_bias=False,trainable =qtrainable)
+                Q_jk_layer = BinaryDense(skills, activation='linear', kernel_initializer=self.f(Q_jk_initialize),use_bias=False,trainable =qtrainable)
                 Q_jk_layer_time =TimeDistributed(Q_jk_layer, name="Q_jk", trainable=qtrainable)
-                Q_jk=Q_jk_layer_time(step_input)
-
-
+                Q_jk= Q_jk_layer_time(step_input)
                 #Q_jk = TimeDistributed(BinaryDense(skills, activation='relu', kernel_initializer=self.custom_random3,
                 #                use_bias=False), name="Q_jk", trainable=qtrainable)(step_input)
                 print('---------------------------------------------------------')
@@ -433,27 +428,23 @@ class DeepAFM:
             pass
 
         Qjk_mul_Bk = multiply([Q_jk, B_k])
-
-        print('its ok')
         #virtual_input1 = Input(batch_shape=(None, None, 1), name='virtual_input1')
-        virtual_input2 = Input(batch_shape=(None,139,139),name = 'virtual_input2')
+        #virtual_input2 = Input(batch_shape=(None,139,139),name = 'virtual_input2')
         #virtual_input2 = Input(batch_shape=(None,None,None),name = 'virtual_input2')
-
         #Dense(skills, activation='linear', kernel_initializer=self.f(model1.get_layer("B_k").get_weights()[0]),
         #      use_bias=False)
-
         Q_jk_weight = Q_jk_layer.get_weights()
         Q_jk_weight = np.array(Q_jk_weight)
-        print('ahhhh',np.shape(Q_jk_weight))
+        Question_to_bow = np.dot(Q_jk_weight,skill_to_bow)
+        QJK_bow = Dense(16, activation='linear', kernel_initializer=self.f(Question_to_bow),
+                        use_bias=False, trainable=False)(step_input)
+        #print('ahhhh',np.shape(Q_jk_weight))
         #Q_jk_weight=K.cast_to_floatx(Q_jk_weight)
         #Q_jk_weight= K.variable(np.array(Q_jk_weight))
-        output2_ = Dense(15,activation="linear",  kernel_initializer=self.f(Q_jk_weight), use_bias=False,name='output2_',trainable=False)(virtual_input2)
+        #output2_ = Dense(15,activation="linear",  kernel_initializer=self.f(Q_jk_weight), use_bias=False,name='output2_',trainable=False)(virtual_input2)
         #  37 139 15
-        output2_ = self.crop()(output2_)
-        print('output2_',np.shape(output2_))
-        # 139 15
         #output2_ = Dense(118, activation="sigmoid",  kernel_initializer=initializers.Ones(), use_bias=True,trainable=True)(output2_)
-        output2 = Dense(118, activation="sigmoid",  kernel_initializer=initializers.Ones(),name='output2' ,use_bias=True,trainable=True)(output2_)
+        output2 = Dense(68, activation="sigmoid",  kernel_initializer=initializers.Ones(),name='output2' ,use_bias=True,trainable=True)(QJK_bow)
 
         #output2 = self.copy(37)(output2_)
         #print('?',np.shape(output2_)) # 139  15
@@ -497,7 +488,7 @@ class DeepAFM:
             Concatenate = concatenate([Concatenate, S_k])
 
         output = TimeDistributed(Dense(1, activation="sigmoid",  kernel_initializer=initializers.Ones(), use_bias=False), name="output",trainable=False)(Concatenate)
-        #output2 = Dense(118, activation="sigmo   id",  kernel_initializer=initializers.Ones(), use_bias=False,name='output2',trainable=True)(Q_jk_weight)
+        #output2 = Dense(118, activation="sigmoid",  kernel_initializer=initializers.Ones(), use_bias=False,name='output2',trainable=True)(Q_jk_weight)
 
         if section == "onehot" and not (theta_student=="False"):
             model = Model(inputs=[virtual_input1, step_input, section_input, student_input], outputs=output)
@@ -506,18 +497,18 @@ class DeepAFM:
         elif not (section == "onehot") and not (theta_student=="False"):
             model = Model(inputs=[virtual_input1, step_input, student_input], outputs=output)
         else:
-            #model = Model(inputs=[virtual_input1, step_input], outputs=[output,output2])
-            model = Model(inputs=[virtual_input1, step_input,virtual_input2], outputs=[output,output2])
+            #model = Model(inputs=[virtual_input1, step_input], outputs=output)
+            model = Model(inputs=[virtual_input1, step_input], outputs=[output,output2])
 
 
         d_optimizer = {"rmsprop":optimizers.RMSprop(lr=0.002), "adam":optimizers.Adam(lr=0.0001), "adagrad":optimizers.Adagrad(lr=0.1) }
         #model.compile( optimizer = d_optimizer["adagrad"],loss = self.custom_bce)
-        model.compile( optimizer = d_optimizer["adagrad"],loss = {'output':self.custom_bce, 'output2':self.another_bce},loss_weights=[1,1.5])
+        model.compile( optimizer = d_optimizer["adagrad"],loss = {'output':self.custom_bce, 'output2':self.another_bce},loss_weights=[1,0.5])
 
         model.summary()
         return model
 
-    def fit(self, x_train, y_train,y_train2, x_train_section, x_train_student, x_test, y_test,y_test2, x_test_section, x_test_student, model, epochs=50000, batch_size=1, loaded=False, validation=True):
+    def fit(self, x_train, y_train,y_train2, x_train_section, x_train_student, x_test, y_test,y_test2, x_test_section, x_test_student, model, epochs=50000, batch_size=32, loaded=False, validation=True):
 
         weights = model.get_weights()
         names = [weight.name for layer in model.layers for weight in layer.weights]
@@ -552,6 +543,7 @@ class DeepAFM:
 
         virtual_input1 = np.ones([np.shape(x_train)[0], np.shape(x_train)[1], 1])
         virtual_input1_test = np.ones([np.shape(x_test)[0], np.shape(x_test)[1], 1])
+        '''
         virtual_input2 = np.eye(np.shape(x_train)[2],np.shape(x_train)[2])
         virtual_input2 = np.tile([virtual_input2], (np.shape(x_train)[0], 1))
         virtual_input2 = np.reshape(virtual_input2, (np.shape(x_train)[0], np.shape(x_train)[2], np.shape(x_train)[2]))
@@ -573,7 +565,7 @@ class DeepAFM:
         print('QQQ',np.shape(y_test)) #139 118
 
         print('QQQ',np.shape(copy_y_test2))  # 10 10 231
-
+        '''
         if not validation:
             earlyStopping = EarlyStopping(monitor='loss', patience=2)
             if len(x_train_student) == 0:
@@ -599,20 +591,22 @@ class DeepAFM:
                 permutation = np.random.permutation(x_train.shape[0])
                 x_train = x_train[permutation]
                 y_train = y_train[permutation]
+                y_train2 = y_train2[permutation]
                 counter += 1
+                y_test =np.array(y_test)
+                y_test2 = np.array(y_test2)
+                #print('<><><><>',np.shape(y_test2))
                 if len(x_train_student) == 0:
                     if len(x_train_section) == 0:
                         with tf.device('/cpu'):
                         #with tf.device('/gpu'):
-                            #history_callback = model.fit([virtual_input1, x_train], [y_train, y_train2], batch_size=batch_size, epochs=1, validation_data=([virtual_input1_test, x_test], [y_test, y_test2]), verbose=0, shuffle=True)
+                            #history_callback = model.fit([virtual_input1, x_train], [y_train], batch_size=batch_size, epochs=1, validation_data=([virtual_input1_test, x_test], [y_test]), verbose=0, shuffle=True)
                             #history_callback = model.fit([virtual_input1, x_train,virtual_input2], [y_train, y_train2],
                             #                         batch_size=batch_size, epochs=1,
                             #                         validation_data=([virtual_input1_test,x_test, virtual_input1_test], [y_test, y_test2]),
                             #                         verbose=0, shuffle=True)
-                            history_callback = model.fit(x={'virtual_input1': np.array(virtual_input1), 'step_input': np.array(x_train),'virtual_input2': np.array(virtual_input2)},
-                             y={'output': np.array(y_train), 'output2': np.array(copy_y_train2)},batch_size=batch_size, epochs=1,
-                                                     validation_data=([np.array(virtual_input1_test), np.array(x_test),np.array(virtual_input2_test)],[y_test,copy_y_test2]),
-                                                                            verbose=0, shuffle=True)
+                            history_callback = model.fit(x={'virtual_input1': np.array(virtual_input1), 'step_input': np.array(x_train)},y={'output': np.array(y_train), 'output2': np.array(y_train2)},batch_size=batch_size, epochs=32,
+                                                     validation_data=([np.array(virtual_input1_test), np.array(x_test)],[y_test,y_test2]),verbose=0, shuffle=True)
 
 
                     else:
@@ -644,12 +638,7 @@ class DeepAFM:
             if len(x_train_section)==0:
                 with tf.device('/cpu'):
                     #x = self.bce_loss(y_train, best_model.predict([virtual_input1, x_train]), x_train)
-                    print('@@@@@@@@@@@@@@@@')
-                    print(np.shape(y_train))
-                    print(np.shape(virtual_input1))
-                    print(np.shape(x_train))
-                    print(np.shape(virtual_input2))
-                    tt = best_model.predict([virtual_input1, x_train,virtual_input2],steps=1)[0]
+                    tt = best_model.predict([virtual_input1, x_train],steps=1)[0]
                     x = self.bce_loss(y_train,tt , x_train)
 
             else:
@@ -823,14 +812,11 @@ class DeepAFM:
     def predict(self, x_test, y_test, x_test_section, x_test_student, model, batch_size=32):
 
         virtual_input_test = np.ones([np.shape(x_test)[0], np.shape(x_test)[1], 1])
-        virtual_input2_test = np.eye(np.shape(x_test)[2],np.shape(x_test)[2])
-        virtual_input2_test = np.tile([virtual_input2_test], (np.shape(x_test)[0], 1))
-        virtual_input2_test = np.reshape(virtual_input2_test, (np.shape(x_test)[0], np.shape(x_test)[2], np.shape(x_test)[2]))
 
         if len(x_test_student)==0:
             if len(x_test_section)==0:
-                #y_pred = model.predict([virtual_input_test, x_test], batch_size=batch_size)
-                y_pred = model.predict([virtual_input_test, x_test,virtual_input2_test], steps=1)
+                y_pred = model.predict([virtual_input_test, x_test], batch_size=batch_size)
+                #y_pred = model.predict([virtual_input_test, x_test], steps=1)
 
             else:
                 y_pred = model.predict([virtual_input_test, x_test, x_test_section] , batch_size=batch_size)
