@@ -124,9 +124,10 @@ class BinaryDense(Dense):
         if self.w_lr_multiplier == 'Glorot':
             self.w_lr_multiplier = np.float32(1. / np.sqrt(1.5 / (int(input_dim) + self.units)))
             #print('Glorot learning rate multiplier: {}'.format(self.kernel_lr_multiplier))
-            
+
         self.w_constraint = Clip(-self.H, self.H)
-        self.w_initializer = initializers.RandomUniform(-self.H, self.H)
+        #self.w_initializer = initializers.RandomUniform(-self.H, self.H)
+        self.w_initializer = initializers.Ones()
         self.w_regularizer =regularizers.l2(0.01)
         self.w = self.add_weight(shape=(input_dim,self.units),
                                      initializer=self.w_initializer,
@@ -165,6 +166,10 @@ class BinaryDense(Dense):
         if self.use_bias:
             output = K.bias_add(output, self.bias)
         if self.activation is not None:
+            print('-------------------------------------------------')
+            print(self.activation)
+            print('-------------------------------------------------')
+
             output = self.activation(output)
         return output
         
@@ -179,3 +184,70 @@ class BinaryDense(Dense):
         return self.binary
 
 # keras在compute gradient的时候 似乎是针对没有binary之前的weight
+
+class BinaryDense3(Dense):
+    ''' Binarized Dense layer
+    References:
+    "BinaryNet: Training Deep Neural Networks with Weights and Activations Constrained to +1 or -1" [http://arxiv.org/abs/1602.02830]
+    '''
+
+    def __init__(self, units, H=1., kernel_lr_multiplier='Glorot', bias_lr_multiplier=None, **kwargs):
+        super(BinaryDense3, self).__init__(units, **kwargs)
+        self.H = H
+        self.kernel_lr_multiplier = kernel_lr_multiplier
+        self.bias_lr_multiplier = bias_lr_multiplier
+
+        super(BinaryDense3, self).__init__(units, **kwargs)
+
+    def build(self, input_shape):
+        # input_shape (None,40)
+        print (input_shape)
+
+        input_dim = input_shape[1]
+        self.kernel = self.add_weight(shape=(input_dim, self.units),
+                                      initializer=self.kernel_initializer,
+                                      name='kernel',
+                                      regularizer=self.kernel_regularizer,
+                                      constraint=self.kernel_constraint)
+
+        if self.H == 'Glorot':
+            self.H = np.float32(np.sqrt(1.5 / (int(input_dim) + self.units)))
+            # print('Glorot H: {}'.format(self.H))
+        if self.kernel_lr_multiplier == 'Glorot':
+            self.kernel_lr_multiplier = np.float32(1. / np.sqrt(1.5 / (int(input_dim) + self.units)))
+            # print('Glorot learning rate multiplier: {}'.format(self.kernel_lr_multiplier))
+
+        if self.use_bias:
+            pass
+        else:
+            self.lr_multipliers = [self.kernel_lr_multiplier]
+            self.bias = None
+
+        self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
+        self.built = True
+        self.binary = binarize(self.kernel, H=self.H)
+
+    def call(self, inputs):
+        # print('！！',type(self.w))
+        # binary_w = binarize(self.w, H=self.H)
+        output = K.dot(inputs, self.binary)
+        # output = K.dot(inputs,self.bw)
+        if self.use_bias:
+            output = K.bias_add(output, self.bias)
+        if self.activation is not None:
+            print('-------------------------------------------------')
+            print(self.activation)
+            print('-------------------------------------------------')
+
+            output = self.activation(output)
+        return output
+
+    def get_config(self):
+        config = {'H': self.H,
+                  'kernel_lr_multiplier': self.kernel_lr_multiplier,
+                  'bias_lr_multiplier': self.bias_lr_multiplier}
+        base_config = super(BinaryDense3, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def get_binary(self):
+        return self.binary

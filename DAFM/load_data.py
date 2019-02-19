@@ -6,6 +6,8 @@ import sys
 import os
 import random
 from datetime import datetime
+import re
+
 
 class DAFM_data:
 
@@ -22,13 +24,53 @@ class DAFM_data:
             student = sorted(list(set(self.complete_data["user_id"].map(str))))
             self.d_student = {j:i for i, j in enumerate(student)}
         problem_ids = sorted(list(set(self.complete_data["problem_id"])))
+
         d_problem = {j:i for i,j in enumerate(problem_ids)}
         #print('-------------------------------------------')
         #print('problem_ids',problem_ids)
-        #print('d_problem',d_problem)
+        print('d_problem',d_problem)
+        #print('HERE')
+        #print(d_problem['TRIANGLE_RECTANGLE(BASE QUESTION1)'])
+        #print(d_problem['TRIANGLE_RECTANGLE(AREA QUESTION1)'])
         self.d_problem = d_problem
-        self.steps = len(d_problem)
+        ################# something new !
+        '''
+        splitquestion = []
+        allwords = []
+        for i in range(len(self.complete_data["problem_id"])):
+            splitquestion.append(re.split('[-_ ()]', re.sub('\)', '', self.complete_data["problem_id"][i])))
+            for j in range(len(splitquestion[i])):
+                if splitquestion[i][j] in allwords:
+                    pass
+                else:
+                    allwords.append(splitquestion[i][j])
 
+        int_to_words = {}
+        for i in range(len(allwords)):
+            int_to_words[i] = allwords[i]
+
+        print('!',len(int_to_words))
+        print('!',int_to_words)
+
+        words_to_int = {}
+        for i in range(len(allwords)):
+            words_to_int[list(int_to_words.values())[i]] = list(int_to_words.keys())[i]
+        '''
+        #self.bow = []
+        #for i in range(len(splitquestion)):
+        #    a = np.zeros((1, len(allwords)))
+        #    for j in range(len(splitquestion[i])):
+        #        a[0, words_to_int[splitquestion[i][j]]] = 1
+        #    self.bow.append(a)
+
+
+        #self.bow = np.squeeze(bow)
+        #self.complete_data["bow"]=self.bow
+
+        #self.bow_skills=[]
+
+        #############################
+        self.steps = len(d_problem)
         g = list(self.complete_data.groupby(["user_id"]))
         responses = []
         for i in range(len(g)):
@@ -55,26 +97,74 @@ class DAFM_data:
             d_section = []
         self.d_section = d_section
         self.section_count = len(self.d_section)
+
         total_skills = []
         #print(self.complete_data["skill_name"])
         for skills in list(self.complete_data["skill_name"]):
-            for skill in skills.split("~~"):
+            for skill in skills.split(";"):
+            #for skill in skills.split("~~"):
                 total_skills.append(skill)
         total_skills = sorted(list(set(total_skills)))
         d_skill = {j:i for i, j in enumerate(total_skills)}
         #print('total:',total_skills)
-        #print('d_skill',d_skill)
+        print('--------------------------???------------------------------')
+        print('d_skill',d_skill)
         self.d_skill = d_skill
         self.skills = len(total_skills)
         Q_jk_initialize = np.zeros((len(d_problem), len(total_skills)),dtype=np.float32 )
         for problem, skills in zip(self.complete_data["problem_id"], self.complete_data["skill_name"]):
-            for skill in skills.split("~~"):
+            for skill in skills.split(";"):
+            #for skill in skills.split("~~"):
                 Q_jk_initialize[d_problem[problem], d_skill[skill]] = 1
         self.Q_jk_initialize = Q_jk_initialize
         #print ('Q_jk',Q_jk_initialize)
-        users = set(list(self.complete_data["user_id"]))
-        self.user_train = list(users.intersection(set(user_train)))
-        self.user_test = list(users.intersection(set(user_test)))
+        '''
+        bow_skills =[]
+        for skills in list(self.complete_data["skill_name"]):
+            for skill in re.split('[-;]',re.sub('ALT\:','', skills)):
+                bow_skills.append(skill)
+        bow_skills = sorted(list(set(bow_skills)))
+
+        print('bow_skills',len(bow_skills))
+        print('bow_skills',bow_skills)
+        d_bow_skills = {j:i for i, j in enumerate(bow_skills)}
+        print('d_bow_skills',d_bow_skills)
+
+        skill_to_bow = np.zeros((15, 16),dtype=np.float32)
+
+        for skills in d_skill.keys():
+            for skill in re.split('[-;]', re.sub('ALT\:', '', skills)):
+                skill_to_bow[d_skill[skills], d_bow_skills[skill]] = 1
+
+        self.skill_to_bow =skill_to_bow
+        '''
+        #Q_jk_bow = np.zeros((len(d_problem), len(bow_skills)),dtype=np.float32)
+
+        #for problem, skills in zip(self.complete_data["problem_id"], self.complete_data["skill_name"]):
+        #    for skill in re.split('[-;]',re.sub('ALT\:','', skills)):
+        #        Q_jk_bow[d_problem[problem], d_bow_skills[skill]] = 1
+        #self.Q_jk_bow = Q_jk_bow
+
+        #users = set(list(self.complete_data["user_id"]))
+        users = set(list(self.complete_data["user_id"].map(str)))
+        # in order to not change the order of the users
+        users = sorted(list(users),key=list(self.complete_data["user_id"].map(str)).index)
+        #print('QQQQusers')
+        #print(users)
+        #print('user_train')
+        #print(user_train)
+        #self.user_train = list(users.intersection(set(user_train)))
+        #self.user_test = list(users.intersection(set(user_test)))
+
+        self.user_train = frozenset(user_train)
+        self.user_train = [x for x in users if x in self.user_train]
+        self.user_test = frozenset(user_test)
+        self.user_test = [x for x in users if x in self.user_test]
+
+        #print('users')
+        #print(users)
+        #print('user_test')
+        #print(user_test)
         self.df_user_responses = df_user_responses
         if (not self.args.item_wise[0]=="False") and (args.puser[0]=="sub"):
             self.complete_data = complete_data[complete_data["user_id"].isin(self.user_train+self.user_test)]
@@ -122,10 +212,18 @@ class DAFM_data:
     def onehot(self, data_onehot, d_problem, max_responses, d_section=[], d_student=[], ttype="train"):
 
         data_train = data_onehot
+        '''
+        bow =data_train["bow"]
+        print('EFFFFSD',np.shape(bow))
+        bow = np.array(bow)
+        print(np.shape(bow))
+        print('fs',np.shape(bow[0]))
+        bow[0] = np.squeeze(bow[0])
+        print('fs',np.shape(bow[0]))
+        '''
         train_users = sorted(list(set(data_train["new_id"])))
         d_train_users = {j:i for i, j in enumerate(train_users)}
         d_response_counter = {j:0 for i, j in enumerate(train_users)}
-
         if not (d_section == []):
             x_train_section = np.zeros((len(d_train_users), max_responses, len(d_section)))
             section_list = data_train["section"]
@@ -137,16 +235,21 @@ class DAFM_data:
             student_list = data_train["new_id"]
         else:
             x_train_student = []
-            student_list = [0]*len(data_train)
-
+            studnt_list = [0]*len(data_train)
+        print(len(d_train_users),max_responses,len(d_problem))
         x_train = np.zeros((len(d_train_users), max_responses, len(d_problem)), dtype=np.uint8)
         y_train = -np.ones((len(d_train_users), max_responses, 1), dtype=np.int8)
+        #second_y = np.zeros((len(d_train_users), max_responses, len(bow[0])), dtype=np.int8)
+        #print('CCXH',len(bow[0]))
         count = 0
         count_test = 0
         count_train = 0
+        #print('bow[0]',bow[0])
         for user, problem, correct, section in zip(data_train["new_id"], data_train["problem_id"], data_train["correct"], section_list):
             if d_response_counter[user] < max_responses:
                 x_train[d_train_users[user], d_response_counter[user], d_problem[problem]]=1
+                #second_y[d_train_users[user], d_response_counter[user]] = bow
+
                 if self.args.puser[0] == "sub" and (not self.args.item_wise[0] == "False") and ttype=="train" and (not (count in list(self.training_items))):
                     y_train[d_train_users[user], d_response_counter[user], 0] = -1
                     count_test += 1
@@ -159,9 +262,10 @@ class DAFM_data:
                     x_train_student[d_train_users[user], d_response_counter[user], d_student[user]]=1
                 d_response_counter[user] += 1
             count += 1
+
         if ((self.args.puser[0]=="orig" or self.args.theta[0]=="valnohot") and (not self.args.theta[0] == "False") and ttype=="test"):
             x_train_student = np.zeros((len(d_train_users), max_responses, len(d_student)))
-        return x_train, y_train, x_train_section, x_train_student
+        return x_train, y_train,x_train_section, x_train_student
 
     def data_generator1(self, request):
 
@@ -197,6 +301,7 @@ class DAFM_data:
     def data_generator(self):
 
             data = self.complete_data
+
             if self.args.puser[0] == "orig":
                 training_data = data[data["user_id"].isin(self.user_train)]
                 testing_data = data[data["user_id"].isin(self.user_test)]
@@ -207,13 +312,15 @@ class DAFM_data:
                 else:
                     training_data = self.complete_data
                     testing_data = data.iloc[self.testing_items][:]
+            print('training_data',training_data)
+            print('?',np.shape(training_data))
             if self.args.skill_wise[0] == "True":
                 x_train, y_train, x_train_section, x_train_student = [], [], [], []
             else:
                 x_train, y_train, x_train_section, x_train_student = self.onehot(data_onehot=training_data, d_problem=self.d_problem, max_responses=self.max_responses, d_section=self.d_section, d_student=self.d_student)
 
             x_test, y_test, x_test_section, x_test_student = self.onehot(data_onehot=testing_data, d_problem=self.d_problem, max_responses=self.max_responses, d_section=self.d_section,d_student=self.d_student, ttype="test")
-            print ("Shapes of the training and test items in the order x, y, x_section, x_student:", np.shape(x_train), np.shape(y_train), np.shape(x_train_section), np.shape(x_train_student), np.shape(x_test), np.shape(y_test), np.shape(x_test_section), np.shape(x_test_student))
+            print ("Shapes of the training and test items in the order x, y,y2, x_section, x_student:", np.shape(x_train), np.shape(y_train),np.shape(x_train_section), np.shape(x_train_student), np.shape(x_test), np.shape(y_test), np.shape(x_test_section), np.shape(x_test_student))
             return x_train, y_train, x_train_section, x_train_student, x_test, y_test, x_test_section, x_test_student
 
     def save_batches(self, users, batch_type="train"):
@@ -229,7 +336,8 @@ class DAFM_data:
         df = self.df_user_responses
         def f(x):
             return x.split("@")[0]
-        df["user_id"] = df["users"].map(f)
+        #df["user_id"] = df["users"].map(f)
+        df["user_id"] = df["users"]
         df = df[df["user_id"].isin(users)]
         users_responses = dict(zip(df["users"].map(str), df["responses"].map(int)))
         d_cat_batch = defaultdict(list)
